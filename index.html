@@ -6,7 +6,7 @@
   <style>
     :root {
       --player-width: 45%;
-      --player-height: 65vh;
+      --player-height: 68vh;     /* 少し大きく調整 */
     }
     html, body {
       margin: 0; padding: 0; height: 100%; scroll-behavior: smooth;
@@ -45,12 +45,23 @@
 
     #main { flex: 1; display: flex; gap: 15px; width: 100%; }
     #player-area {
-      width: var(--player-width); height: var(--player-height);
-      flex-shrink: 0; position: relative; min-width: 320px;
-      background: white; border-radius: 12px;
-      box-shadow: 0 5px 25px rgba(0,0,0,0.2); overflow: hidden;
+      width: var(--player-width); 
+      height: var(--player-height);
+      min-height: 420px;           /* 最低高さ確保 */
+      flex-shrink: 0; 
+      position: relative; 
+      min-width: 320px;
+      background: white; 
+      border-radius: 12px;
+      box-shadow: 0 5px 25px rgba(0,0,0,0.2); 
+      overflow: hidden;
     }
-    iframe { width: 100%; height: 100%; border: none; }
+    iframe { 
+      width: 100%; 
+      height: 100%; 
+      border: none; 
+      display: block;
+    }
 
     #player-horizontal-handle { position: absolute; top: 0; right: -4px; width: 9px; height: 100%; background: transparent; cursor: col-resize; z-index: 220; }
     #vertical-resize-bar { position: absolute; bottom: 0; left: 0; width: 100%; height: 8px; background: #ddd; cursor: row-resize; z-index: 230; transition: background 0.2s; }
@@ -75,23 +86,29 @@
     .video-item {
       background: white; border-radius: 12px; overflow: hidden;
       box-shadow: 0 3px 12px rgba(0,0,0,0.1); transition: transform 0.2s;
-      position: relative;
+      position: relative; display: flex; flex-direction: column;
     }
-    .video-item:hover { transform: translateY(-4px); }
-    .thumbnail { position: relative; }
+    .thumbnail {
+      position: relative;
+      width: 100%;
+      padding-top: 56.25%; /* 16:9固定 */
+    }
     .thumbnail img {
-      width: 100%; aspect-ratio: 16/9; object-fit: cover;
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
     }
     .play-btn {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: 60px; height: 60px; background: rgba(0,0,0,0.78); color: white;
       border-radius: 50%; font-size: 32px; display: grid; place-items: center;
+      z-index: 2;
     }
     .video-title {
       padding: 12px; font-size: 14.5px; line-height: 1.4;
       display: -webkit-box; -webkit-line-clamp: 4;
       -webkit-box-orient: vertical; overflow: hidden;
-      min-height: 82px; position: relative;
+      flex: 1;
     }
     .copy-btn, .later-btn {
       position: absolute; top: 10px; background: rgba(0,0,0,0.85);
@@ -169,12 +186,12 @@
   </div>
 
 <script>
+  /* スクリプト部分は前回と同じ（変更なし） */
   const apiKey = "AIzaSyAxk1YpQSe-qDtFUSUmnjnduanag41Mlyk";
   const uploadsPlaylistId = "UUFdBehO71GQaIom4WfVeGSw";
   const historyKey = "daigo_history";
   const laterKey = "daigo_later";
 
-  // DOM
   const sidebar = document.getElementById("sidebar");
   const toggleHistoryBtn = document.getElementById("toggleHistoryBtn");
   const toggleLaterBtn = document.getElementById("toggleLaterBtn");
@@ -264,7 +281,6 @@
     saveHistory({id: videoId, title});
   }
 
-  // ====================== 2段階取得（安定版） ======================
   async function fetchDaiGoVideos() {
     let items = [];
     let pageToken = "";
@@ -274,23 +290,19 @@
 
     loadingEl.textContent = `先行取得中... (${FIRST_LOAD}ページ)`;
 
-    // 1段階目：先行表示
     while (pageToken !== null && pageCount < FIRST_LOAD) {
       try {
         const res = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${uploadsPlaylistId}&key=${apiKey}&pageToken=${pageToken}`);
         if (!res.ok) break;
         const data = await res.json();
         if (data.items) items = items.concat(data.items);
-
         pageToken = data.nextPageToken;
         pageCount++;
-
         loadingEl.textContent = `先行表示中... ${items.length}本 (${pageCount}/${FIRST_LOAD})`;
         await new Promise(r => setTimeout(r, 160));
       } catch (e) { console.warn(e); break; }
     }
 
-    // 先行分を確実に表示
     renderAdditionalVideos(items, true);
     renderHistory();
     renderLater();
@@ -298,7 +310,6 @@
 
     loadingEl.textContent = `先行${FIRST_LOAD}ページ完了！ 残りを取得中...`;
 
-    // 2段階目：残り取得
     while (pageToken !== null && pageCount < MAX_PAGES) {
       try {
         const res = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${uploadsPlaylistId}&key=${apiKey}&pageToken=${pageToken}`);
@@ -325,17 +336,13 @@
       videosContainer.innerHTML = "";
       allVideoElements = [];
     }
-
     const fragment = document.createDocumentFragment();
-
     newItems.forEach(item => {
       const videoId = item.snippet.resourceId?.videoId;
-      if (!videoId) return;
-      if (document.querySelector(`[data-id="${videoId}"]`)) return; // 重複防止
+      if (!videoId || document.querySelector(`[data-id="${videoId}"]`)) return;
 
       const rawTitle = item.snippet.title.toLowerCase();
-      if (rawTitle.includes("short") || rawTitle.includes("ショート") || 
-          rawTitle.includes("1分") || rawTitle.includes("60秒")) return;
+      if (rawTitle.includes("short") || rawTitle.includes("ショート") || rawTitle.includes("1分") || rawTitle.includes("60秒")) return;
 
       const title = item.snippet.title;
       const thumbnail = item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || "";
@@ -360,19 +367,12 @@
           playVideo(videoId, title, div);
         }
       };
-      div.querySelector('.copy-btn').onclick = (e) => { 
-        e.stopPropagation(); 
-        navigator.clipboard.writeText(`https://www.youtube.com/watch?v=${videoId}`); 
-      };
-      div.querySelector('.later-btn').onclick = (e) => { 
-        e.stopPropagation(); 
-        saveLater({id: videoId, title}); 
-      };
+      div.querySelector('.copy-btn').onclick = (e) => { e.stopPropagation(); navigator.clipboard.writeText(`https://www.youtube.com/watch?v=${videoId}`); };
+      div.querySelector('.later-btn').onclick = (e) => { e.stopPropagation(); saveLater({id: videoId, title}); };
 
       fragment.appendChild(div);
       allVideoElements.push(div);
     });
-
     videosContainer.appendChild(fragment);
   }
 
@@ -387,13 +387,11 @@
     });
   }
 
-  // 初期化
   async function main() {
     searchInput.addEventListener("input", filterVideos);
     await fetchDaiGoVideos();
   }
 
-  // イベント
   toggleHistoryBtn.addEventListener("click", () => { isHistoryVisible = !isHistoryVisible; updateSidebar(); });
   toggleLaterBtn.addEventListener("click", () => { isLaterVisible = !isLaterVisible; updateSidebar(); });
   document.getElementById("clearHistoryBtn").addEventListener("click", () => {
@@ -405,7 +403,6 @@
   jumpBtn.addEventListener("click", () => currentActive?.scrollIntoView({behavior:"smooth", block:"center"}));
   topBtn.addEventListener("click", () => document.getElementById("videos-wrapper").scrollTo({top:0, behavior:"smooth"}));
 
-  // リサイズ機能
   let isResizingHorizontal = false, isResizingVertical = false;
   function initResize() {
     const resizeBar = document.getElementById("resize-bar");
@@ -441,7 +438,7 @@
       if (isResizingVertical) {
         const playerRect = playerArea.getBoundingClientRect();
         let newHeightPx = e.clientY - playerRect.top;
-        newHeightPx = Math.max(280, Math.min(window.innerHeight * 0.95, newHeightPx));
+        newHeightPx = Math.max(320, Math.min(window.innerHeight * 0.92, newHeightPx));
         const newHeightVh = (newHeightPx / window.innerHeight) * 100;
         document.documentElement.style.setProperty("--player-height", newHeightVh + "vh");
       }

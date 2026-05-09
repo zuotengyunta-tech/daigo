@@ -35,7 +35,6 @@
       flex-direction: column;
     }
     #sidebar.open { width: 380px; }
-
     .sidebar-section {
       flex: 1;
       display: flex;
@@ -193,7 +192,7 @@
       </div>
       <div id="videos-wrapper">
         <div id="videos"></div>
-        <div id="loading">DaiGoの動画を取得中...（ショート除外）</div>
+        <div id="loading">DaiGoの動画を取得中...（上限5000件・ショート除外）</div>
       </div>
     </div>
   </div>
@@ -205,7 +204,7 @@
 
 <script>
   const apiKey = "AIzaSyAxk1YpQSe-qDtFUSUmnjnduanag41Mlyk";
-  const uploadsPlaylistId = "UUFdBehO71GQaIom4WfVeGSw"; // DaiGo uploads
+  const uploadsPlaylistId = "UUFdBehO71GQaIom4WfVeGSw";
 
   const historyKey = "daigo_history";
   const laterKey = "daigo_later";
@@ -258,9 +257,7 @@
 
   function renderHistory() {
     const data = loadHistory();
-    historyBox.innerHTML = data.length === 0 
-      ? '<p style="color:#888;text-align:center;padding:40px 10px;">履歴はありません</p>' 
-      : "";
+    historyBox.innerHTML = data.length === 0 ? '<p style="color:#888;text-align:center;padding:40px 10px;">履歴はありません</p>' : "";
     data.forEach(item => {
       const div = document.createElement("div");
       div.className = "history-item";
@@ -278,9 +275,7 @@
 
   function renderLater() {
     const data = loadLater();
-    laterBox.innerHTML = data.length === 0 
-      ? '<p style="color:#888;text-align:center;padding:40px 10px;">後で見るリストは空です</p>' 
-      : "";
+    laterBox.innerHTML = data.length === 0 ? '<p style="color:#888;text-align:center;padding:40px 10px;">後で見るリストは空です</p>' : "";
     data.forEach(item => {
       const div = document.createElement("div");
       div.className = "later-item";
@@ -310,30 +305,45 @@
     saveHistory({id: videoId, title});
   }
 
-  // DaiGo動画取得
+  // ==================== 取得上限解放（5000件対応） ====================
   async function fetchDaiGoVideos() {
     let items = [], pageToken = "", pageCount = 0;
-    const maxPages = 18;   // 必要に応じて調整可
+    const maxPages = 100;   // 100ページ × 50 = 最大5000件
+
+    loadingEl.textContent = `DaiGo動画取得中... 0本`;
 
     do {
       const res = await fetch(
         `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${uploadsPlaylistId}&key=${apiKey}&pageToken=${pageToken}`
       );
+
       if (!res.ok) break;
+
       const data = await res.json();
       if (data.items) items = items.concat(data.items);
+
       pageToken = data.nextPageToken;
       pageCount++;
-      await new Promise(r => setTimeout(r, 220));
+
+      // 進捗表示ロジック（50ページまで200件ごと、51ページ以降は20ページごと）
+      const shouldUpdate = 
+        (pageCount <= 50 && items.length % 200 === 0) ||
+        (pageCount > 50 && pageCount % 20 === 0) ||
+        !pageToken;
+
+      if (shouldUpdate) {
+        loadingEl.textContent = `取得中... ${items.length}本 (${pageCount}ページ / ${maxPages})`;
+      }
+
+      await new Promise(r => setTimeout(r, 250)); // API負荷軽減
     } while (pageToken && pageCount < maxPages);
 
+    loadingEl.textContent = `全 ${items.length}本取得完了！ フィルタ中...`;
     return items;
   }
 
   async function main() {
-    loadingEl.textContent = "DaiGoの動画を取得中...";
     videosContainer.innerHTML = "";
-
     const items = await fetchDaiGoVideos();
     const fragment = document.createDocumentFragment();
 
@@ -368,13 +378,13 @@
           playVideo(videoId, title, div);
         }
       };
-      div.querySelector('.copy-btn').onclick = (e) => { 
-        e.stopPropagation(); 
-        navigator.clipboard.writeText(`https://www.youtube.com/watch?v=${videoId}`); 
+      div.querySelector('.copy-btn').onclick = (e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(`https://www.youtube.com/watch?v=${videoId}`);
       };
-      div.querySelector('.later-btn').onclick = (e) => { 
-        e.stopPropagation(); 
-        saveLater({id: videoId, title}); 
+      div.querySelector('.later-btn').onclick = (e) => {
+        e.stopPropagation();
+        saveLater({id: videoId, title});
       };
 
       fragment.appendChild(div);

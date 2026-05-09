@@ -305,18 +305,18 @@
     saveHistory({id: videoId, title});
   }
 
-  // ==================== 取得上限解放（5000件対応） ====================
+  // ==================== 2段階取得（50ページで一旦完了 → 後半はゆっくり） ====================
   async function fetchDaiGoVideos() {
     let items = [], pageToken = "", pageCount = 0;
-    const maxPages = 100;   // 100ページ × 50 = 最大5000件
+    const maxPages = 100;
 
     loadingEl.textContent = `DaiGo動画取得中... 0本`;
 
-    do {
+    // ==================== 前半：50ページまで ====================
+    while (pageToken !== null && pageCount < 50 && pageCount < maxPages) {
       const res = await fetch(
         `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${uploadsPlaylistId}&key=${apiKey}&pageToken=${pageToken}`
       );
-
       if (!res.ok) break;
 
       const data = await res.json();
@@ -325,18 +325,34 @@
       pageToken = data.nextPageToken;
       pageCount++;
 
-      // 進捗表示ロジック（50ページまで200件ごと、51ページ以降は20ページごと）
-      const shouldUpdate = 
-        (pageCount <= 50 && items.length % 200 === 0) ||
-        (pageCount > 50 && pageCount % 20 === 0) ||
-        !pageToken;
-
-      if (shouldUpdate) {
-        loadingEl.textContent = `取得中... ${items.length}本 (${pageCount}ページ / ${maxPages})`;
+      if (items.length % 200 === 0 || !pageToken) {
+        loadingEl.textContent = `前半取得中... ${items.length}本 (${pageCount}ページ / 50)`;
       }
+      await new Promise(r => setTimeout(r, 200));
+    }
 
-      await new Promise(r => setTimeout(r, 250)); // API負荷軽減
-    } while (pageToken && pageCount < maxPages);
+    loadingEl.textContent = `前半50ページ完了！ (${items.length}本) 後半を取得しています...`;
+    await new Promise(r => setTimeout(r, 800)); // 少し間を置く
+
+    // ==================== 後半：残りをゆっくり取得 ====================
+    while (pageToken !== null && pageCount < maxPages) {
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${uploadsPlaylistId}&key=${apiKey}&pageToken=${pageToken}`
+      );
+      if (!res.ok) break;
+
+      const data = await res.json();
+      if (data.items) items = items.concat(data.items);
+
+      pageToken = data.nextPageToken;
+      pageCount++;
+
+      // 後半は10ページごとに更新
+      if (pageCount % 10 === 0 || !pageToken) {
+        loadingEl.textContent = `後半取得中... ${items.length}本 (${pageCount}ページ / ${maxPages})`;
+      }
+      await new Promise(r => setTimeout(r, 350)); // 後半は遅めに
+    }
 
     loadingEl.textContent = `全 ${items.length}本取得完了！ フィルタ中...`;
     return items;

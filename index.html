@@ -264,7 +264,7 @@
     saveHistory({id: videoId, title});
   }
 
-  // ====================== 2段階取得 ======================
+  // ====================== 2段階取得（安定版） ======================
   async function fetchDaiGoVideos() {
     let items = [];
     let pageToken = "";
@@ -281,14 +281,16 @@
         if (!res.ok) break;
         const data = await res.json();
         if (data.items) items = items.concat(data.items);
+
         pageToken = data.nextPageToken;
         pageCount++;
+
         loadingEl.textContent = `先行表示中... ${items.length}本 (${pageCount}/${FIRST_LOAD})`;
         await new Promise(r => setTimeout(r, 160));
       } catch (e) { console.warn(e); break; }
     }
 
-    // 先行分を表示
+    // 先行分を確実に表示
     renderAdditionalVideos(items, true);
     renderHistory();
     renderLater();
@@ -325,6 +327,7 @@
     }
 
     const fragment = document.createDocumentFragment();
+
     newItems.forEach(item => {
       const videoId = item.snippet.resourceId?.videoId;
       if (!videoId) return;
@@ -390,7 +393,7 @@
     await fetchDaiGoVideos();
   }
 
-  // イベント設定
+  // イベント
   toggleHistoryBtn.addEventListener("click", () => { isHistoryVisible = !isHistoryVisible; updateSidebar(); });
   toggleLaterBtn.addEventListener("click", () => { isLaterVisible = !isLaterVisible; updateSidebar(); });
   document.getElementById("clearHistoryBtn").addEventListener("click", () => {
